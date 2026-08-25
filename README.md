@@ -61,6 +61,27 @@ curves, all three streak types, ledger voids, every reducer action, merge
 commutativity and idempotence, import validation of hostile input — plus render
 smoke tests that build each screen and each form for real in the DOM.
 
+## Deploying it
+
+The app is static files, so any HTTPS host works. It is set up for GitHub Pages
+at `https://callum-dev-x.github.io/questlog/`:
+
+```bash
+./tools/deploy.sh "what changed"
+```
+
+That stamps a new service-worker cache version (without one, installed copies
+keep serving the old files), commits, and pushes to `origin/main`. The first
+deploy also needs Pages switched on once: repo → Settings → Pages → Deploy from
+a branch → `main` / `root`.
+
+Paths throughout are relative, so serving from a subdirectory like
+`/questlog/` works — the worker registers with scope `/questlog/` and precaches
+all 30 shell files from there. That is verified, not assumed.
+
+The repository is public; your data is not in it. Habits, tasks and XP live only
+in the browser storage of each device you use.
+
 ## Installing it
 
 - **macOS Safari** — File → Add to Dock.
