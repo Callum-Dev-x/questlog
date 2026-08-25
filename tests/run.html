@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>questlog tests — running…</title>
+<style>
+  body { background:#12121a; color:#e6e6f0; font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; margin:0; padding:20px; }
+  #status { position:sticky; top:0; padding:10px 14px; border-radius:8px; font-weight:700; margin-bottom:14px; }
+  .pass { background:#123d2a; color:#6ee7a8; }
+  .fail { background:#43151f; color:#ff9db1; }
+  pre { white-space:pre-wrap; margin:0; }
+  .l-fail { color:#ff9db1; }
+  .l-ok { color:#7f8397; }
+  .l-suite { color:#c4b5fd; font-weight:700; margin-top:8px; display:block; }
+</style>
+</head>
+<body>
+<div id="status" class="fail">running…</div>
+<pre id="out"></pre>
+<script type="module">
+  import { run } from './harness.js';
+  import './dates.test.js';
+  import './xp.test.js';
+  import './streaks.test.js';
+  import './ledger.test.js';
+  import './state.test.js';
+  import './selectors.test.js';
+  import './merge.test.js';
+  import './io.test.js';
+  import './views.test.js';
+
+  const res = await run();
+  window.__testResults = res;
+  const status = document.getElementById('status');
+  status.textContent = res.summary;
+  status.className = res.failed === 0 ? 'pass' : 'fail';
+  document.title = `questlog tests — ${res.summary}`;
+  const out = document.getElementById('out');
+  out.innerHTML = res.text.split('\n').map((line) => {
+    const cls = line.startsWith('  FAIL') || line.startsWith('       ') ? 'l-fail'
+      : line.startsWith('  ok') ? 'l-ok'
+      : line.trim() && !line.startsWith(' ') ? 'l-suite' : '';
+    const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    return cls ? `<span class="${cls}">${esc}</span>` : esc;
+  }).join('\n');
+  console.log(res.text);
+</script>
+</body>
+</html>
