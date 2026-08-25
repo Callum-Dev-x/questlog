@@ -28,7 +28,7 @@ async function shareOrDownload(text, filename, ctx) {
   ctx.toast(`Saved ${filename}`);
 }
 
-function syncCard(ctx) {
+function backupCard(ctx) {
   const modeWrap = h('div.segmented', {},
     [['merge', 'Merge'], ['replace', 'Replace']].map(([value, label]) => h('label.segment', {},
       h('input', { type: 'radio', name: 'importMode', value, checked: value === 'merge' || null }),
@@ -105,6 +105,113 @@ function syncCard(ctx) {
       ? h('p.card-note', { text: `Last import: ${new Date(ctx.state.meta.lastImportAt).toLocaleString()}` })
       : null,
     h('p.card-note.mono', { text: `This device: ${ctx.state.meta.deviceId}` }));
+}
+
+const SYNC_STATE_TEXT = {
+  off: 'Not connected',
+  idle: 'Connected — not synced yet',
+  syncing: 'Syncing…',
+  ok: 'Synced',
+  error: 'Sync failed',
+  offline: 'Offline',
+};
+
+function relativeTime(iso) {
+  if (!iso) return null;
+  const seconds = Math.round((Date.now() - Date.parse(iso)) / 1000);
+  if (!Number.isFinite(seconds)) return null;
+  if (seconds < 45) return 'just now';
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)} h ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function syncCard(ctx) {
+  const sync = ctx.sync;
+  if (!sync) return null;
+  const status = sync.status;
+  const connected = sync.isEnabled();
+  const tone = status.state === 'error' ? 'danger'
+    : status.state === 'offline' ? 'warn'
+      : status.state === 'ok' ? 'good' : null;
+
+  const statusLine = h('p.card-note', {},
+    h(`span.sync-dot.is-${status.state}`),
+    h('span', { class: tone ? `is-${tone}` : null, text: SYNC_STATE_TEXT[status.state] || status.state }),
+    status.lastSyncedAt && status.state === 'ok'
+      ? h('span.muted', { text: ` · ${relativeTime(status.lastSyncedAt)}` })
+      : null,
+    status.message ? h('span.muted', { text: ` · ${status.message}` }) : null);
+
+  if (!connected) {
+    const input = h('input.input', {
+      placeholder: 'https://…workers.dev/v1/doc  — or a sync link from your other device',
+      autocomplete: 'off', spellcheck: 'false',
+    });
+    return h('div.card.settings-card', {},
+      h('h3.card-title', { text: 'Automatic sync (optional)' }),
+      h('p.card-note', { text: 'Point both devices at your own Cloudflare Worker and they will keep themselves in step. Export and import keep working either way — this only adds to them.' }),
+      statusLine,
+      field('Sync server or link', input,
+        'First device: paste your Worker URL and a secret key is generated. Second device: paste the sync link from the first.'),
+      h('div.btn-row', {},
+        button('Connect', {
+          variant: 'primary',
+          onClick: async () => {
+            try {
+              sync.connect(input.value);
+              ctx.toast('Connected — syncing now', 'good');
+              const result = await sync.syncNow();
+              if (result && result.error) ctx.toast(result.error, 'danger');
+            } catch (err) {
+              ctx.toast(err.message, 'danger');
+            }
+          },
+        }),
+        h('a.btn', { href: 'https://github.com/Callum-Dev-x/questlog#automatic-sync-optional', target: '_blank', rel: 'noopener' },
+          h('span', { text: 'How to set the Worker up' }))),
+      h('p.form-note', { text: 'Your data would then rest on Cloudflare rather than only on your devices. Anyone holding the sync link can read and write it, so treat it like a password.' }));
+  }
+
+  const link = sync.link();
+  return h('div.card.settings-card', {},
+    h('h3.card-title', { text: 'Automatic sync' }),
+    statusLine,
+    field('Sync link for your other device',
+      h('div.inline', {},
+        h('input.input.mono', { value: link, readonly: true, onclick: (e) => e.target.select() })),
+      'Paste this into the same box on your other device. It is a secret — anyone with it can read your data.'),
+    h('div.btn-row', {},
+      button('Sync now', {
+        variant: 'primary',
+        icon: ICONS.undo,
+        onClick: async () => {
+          const result = await sync.syncNow();
+          if (result && result.error) ctx.toast(result.error, 'danger');
+          else if (result && result.uploaded) ctx.toast('Synced — this device was ahead', 'good');
+          else if (result && result.pulled) ctx.toast('Synced — pulled changes in', 'good');
+          else ctx.toast('Already in sync', 'good');
+        },
+      }),
+      button('Copy link', {
+        icon: ICONS.list,
+        onClick: async () => {
+          try {
+            await navigator.clipboard.writeText(link);
+            ctx.toast('Sync link copied — paste it on your other device', 'good');
+          } catch {
+            ctx.toast('Clipboard blocked — select the link and copy it by hand', 'warn');
+          }
+        },
+      }),
+      button('Disconnect', {
+        variant: 'ghost',
+        onClick: () => {
+          if (!confirm('Stop syncing on this device? Your data stays here, and the copy on the server is left alone.')) return;
+          sync.disconnect();
+          ctx.toast('Sync disconnected', 'warn');
+        },
+      })));
 }
 
 function preferencesCard(ctx) {
@@ -193,6 +300,7 @@ export function renderSettings(ctx) {
   return h('div.view', {},
     section('Settings', null,
       h('div.stack', {},
+        backupCard(ctx),
         syncCard(ctx),
         preferencesCard(ctx),
         storageCard(ctx),

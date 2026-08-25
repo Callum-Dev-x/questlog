@@ -4,7 +4,7 @@
 // the whole app is precached on install and served from the cache first, with a
 // quiet background refresh so a redeploy is picked up on the next launch.
 
-const VERSION = 'questlog-v2';
+const VERSION = 'questlog-20260826-0002';
 const SHELL = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const SHELL = [
   './src/ui/components.js',
   './src/ui/forms.js',
   './src/ui/install.js',
+  './src/ui/syncclient.js',
   './src/ui/views/today.js',
   './src/ui/views/projects.js',
   './src/ui/views/stats.js',
@@ -31,6 +32,7 @@ const SHELL = [
   './src/core/merge.js',
   './src/core/io.js',
   './src/core/selectors.js',
+  './src/core/sync.js',
   './icons/favicon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',

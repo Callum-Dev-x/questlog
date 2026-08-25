@@ -25,7 +25,8 @@ questlog/
 │   │   ├── state.js           the reducer — the only thing that writes entries
 │   │   ├── merge.js           two-device merge (commutative, idempotent)
 │   │   ├── io.js              export / import
-│   │   └── selectors.js       read models for the views
+│   │   ├── selectors.js       read models for the views
+│   │   └── sync.js            sync protocol — the pure half
 │   └── ui/                    DOM layer
 │       ├── dom.js             40-line hyperscript
 │       ├── store.js           reducer + persistence + events
@@ -33,10 +34,12 @@ questlog/
 │       ├── components.js      shared pieces
 │       ├── forms.js           modal editors
 │       ├── install.js         install-prompt plumbing
+│       ├── syncclient.js      sync over the network, with retry
 │       ├── app.js             boot, routing, toasts, celebrations
 │       └── views/             today · projects · stats · settings
-├── tests/                     browser test suite (154 tests)
-└── tools/                     dev server + icon generator
+├── tests/                     browser test suite (180 tests)
+├── tools/                     dev server (with sync emulator), icons, deploy
+└── worker/                    optional Cloudflare Worker for sync
 ```
 
 ## Running it
@@ -59,7 +62,9 @@ a green PASS bar with per-test results; the machine-readable results are on
 The suite covers the whole engine — date arithmetic across DST, the XP and level
 curves, all three streak types, ledger voids, every reducer action, merge
 commutativity and idempotence, import validation of hostile input — plus render
-smoke tests that build each screen and each form for real in the DOM.
+smoke tests that build each screen and each form for real in the DOM, and an
+end-to-end sync flow where two in-memory devices converge over real HTTP against
+the emulator built into the dev server.
 
 ## Deploying it
 
@@ -81,6 +86,57 @@ all 30 shell files from there. That is verified, not assumed.
 
 The repository is public; your data is not in it. Habits, tasks and XP live only
 in the browser storage of each device you use.
+
+## Automatic sync (optional)
+
+Export/import always works and needs nothing. If you would rather the devices
+kept themselves in step, `worker/sync-worker.js` is a Cloudflare Worker that
+stores one JSON document per key. There are still no accounts: the app mints a
+32-character key, and that key *is* your identity.
+
+**Setting it up** (about five minutes, free tier, no CLI needed — `wrangler` is
+an npm package and this machine has no Node):
+
+1. Sign in at [dash.cloudflare.com](https://dash.cloudflare.com) — the free plan
+   is enough.
+2. **Storage & Databases → KV → Create a namespace**, call it `questlog`.
+3. **Compute (Workers) → Create → start from Hello World**, name it
+   `questlog-sync`, and deploy the placeholder.
+4. **Edit code** on that Worker, replace everything with the contents of
+   `worker/sync-worker.js`, and deploy.
+5. On the Worker: **Settings → Bindings → Add → KV namespace**. Variable name
+   **`QUESTLOG`** (exactly), pointed at the namespace from step 2. Deploy again.
+6. In questlog → **Settings → Automatic sync**, paste
+   `https://questlog-sync.<your-subdomain>.workers.dev/v1/doc` and press
+   **Connect**. A key is generated and the first upload happens immediately.
+7. On the second device, press **Copy link** on the first, and paste that whole
+   link into the same box. Both devices now share one document.
+
+Cloudflare renames things in its dashboard from time to time; the shape of the
+steps holds even when the labels drift.
+
+**What it does.** Syncs on launch, when you bring the app back to the front,
+when the network returns, and about four seconds after any change. Conflicts are
+handled by the same merge that powers file import, so two devices editing
+offline converge without losing anything, and ticking the same habit on both
+still counts once.
+
+**The limits that matter.** KV allows roughly 1,000 writes a day on the free
+plan — a sync that uploads is one write, so ordinary use is nowhere near it.
+KV is also eventually consistent and has no compare-and-swap, so a simultaneous
+write from both devices can drop one upload. That is safe here rather than
+merely tolerable: nothing was lost locally, and the next sync re-merges and
+re-uploads. The Worker still version-checks and returns `409`, and the client
+re-reads and retries up to three times.
+
+**What you are trading.** Your data would then rest on Cloudflare rather than
+only on your own devices, and anyone holding the sync link can read and write
+it. It is a password in URL form. Keep manual export/import instead if that
+trade is not worth it to you — nothing else in the app depends on sync.
+
+**Origins.** The Worker only answers browsers it recognises. `ALLOWED_ORIGINS`
+at the top of `sync-worker.js` lists them; add your own if you host the app
+somewhere else.
 
 ## Installing it
 

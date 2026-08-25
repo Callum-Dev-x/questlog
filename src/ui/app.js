@@ -12,6 +12,7 @@ import { renderProjects } from './views/projects.js';
 import { renderStats } from './views/stats.js';
 import { renderSettings } from './views/settings.js';
 import { initInstall, onInstallChange } from './install.js';
+import { createSyncManager } from './syncclient.js';
 
 const ROUTES = [
   { id: 'today', label: 'Today', icon: ICONS.target, render: renderToday },
@@ -78,9 +79,11 @@ async function boot() {
   const modalTitle = document.getElementById('modal-title');
 
   let route = routeFromHash();
+  const sync = createSyncManager(store);
 
   const ctx = {
     store,
+    sync,
     get state() { return store.getState(); },
     today: dayKey(),
     toast,
@@ -172,6 +175,7 @@ async function boot() {
 
   store.subscribe(() => {
     render();
+    sync.schedule(); // debounced; no-op when sync is off or applying a pull
     const perfect = getTodayView(store.getState(), { today: ctx.today }).perfectDay;
     if (perfect && !wasPerfect) {
       toast('Perfect day — every habit done', 'good');
@@ -223,6 +227,8 @@ async function boot() {
 
   initInstall();
   onInstallChange(() => { if (route === 'settings') render(); });
+  sync.onStatus(() => { if (route === 'settings') render(); });
+  sync.start();
   render();
   root.classList.add('is-ready');
   requestPersistence();
