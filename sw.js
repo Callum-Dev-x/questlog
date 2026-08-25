@@ -4,7 +4,7 @@
 // the whole app is precached on install and served from the cache first, with a
 // quiet background refresh so a redeploy is picked up on the next launch.
 
-const VERSION = 'questlog-20260826-0002';
+const VERSION = 'questlog-20260826-0004';
 const SHELL = [
   './',
   './index.html',

@@ -50,8 +50,24 @@ function hydrate(raw) {
  */
 function registerServiceWorker(toast) {
   if (!('serviceWorker' in navigator)) return;
+
+  // A worker that finished installing sits in 'waiting' until every tab using
+  // the old one closes — which for an app you leave open means updates arrive a
+  // launch late. Applying it during boot is safe (nothing has happened in this
+  // session yet) and costs one reload; applying it mid-session is not, so that
+  // case only offers a toast.
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
+
   const register = () => {
     navigator.serviceWorker.register('./sw.js').then((registration) => {
+      if (registration.waiting && navigator.serviceWorker.controller) {
+        registration.waiting.postMessage('skip-waiting');
+      }
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing;
         if (!worker) return;
